@@ -1,0 +1,78 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fdg-pet-ct-mlx"
+version = "0.2.4"
+description = "Native MLX FDG PET image synthesis"
+readme = "README.md"
+classifiers = ["Operating System :: MacOS :: MacOS X"]
+requires-python = ">=3.13,<3.15"
+license = "Apache-2.0"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+authors = [{ name = "Joseph Sandoval" }, { name = "Alfredo Sandoval Jr." }]
+dependencies = [
+  "medmlx-core==0.2.5",
+  "mlx>=0.32.4,<1",
+  "numpy>=2.0,<3",
+  "nibabel>=5.4.2,<6",
+]
+
+[project.entry-points."medmlx.models"]
+fdg-pet-ct = "fdg_pet_ct_mlx.medmlx:MODEL"
+
+[project.optional-dependencies]
+dev = [
+  "pyright==1.1.414",
+  "pytest>=8.4,<10",
+  "ruff>=0.13,<1",
+  "scipy>=1.13,<2",
+  "scipy-stubs>=1.18,<1.19",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fdg_pet_ct_mlx"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-config --strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+extend-select = ["TID251", "TID252", "ANN401"]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.pyright]
+include = ["src", "tests", "typings"]
+extraPaths = ["src"]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+enableTypeIgnoreComments = false
+reportUnnecessaryTypeIgnoreComment = "error"
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"typing.Any" = {msg = "Use a precise type and parse untyped values at the boundary."}
+"typing_extensions.Any" = {msg = "Use a precise type and parse untyped values at the boundary."}
+
+[tool.uv]
+constraint-dependencies = ["setuptools>=84.1.0", "filelock>=4.2.1", ]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["AGENTS.md", "CLAUDE.md", ".claude", ".codex", ".cursor"]
+only-include = [
+  "src/fdg_pet_ct_mlx",
+  "pyproject.toml",
+  "README.md",
+  "LICENSE",
+  "THIRD_PARTY_NOTICES.md",
+]
