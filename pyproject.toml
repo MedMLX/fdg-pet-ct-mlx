@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fdg-pet-ct-mlx"
-version = "0.2.4"
+version = "0.2.5"
 description = "Native MLX FDG PET image synthesis"
 readme = "README.md"
 classifiers = ["Operating System :: MacOS :: MacOS X"]
@@ -18,6 +18,9 @@ dependencies = [
   "numpy>=2.0,<3",
   "nibabel>=5.4.2,<6",
 ]
+
+[project.urls]
+Repository = "https://github.com/MedMLX/fdg-pet-ct-mlx"
 
 [project.entry-points."medmlx.models"]
 fdg-pet-ct = "fdg_pet_ct_mlx.medmlx:MODEL"

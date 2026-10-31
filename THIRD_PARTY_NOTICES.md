@@ -15,7 +15,9 @@ dataset or provider terms apply independently of this package's source license.
 
 ## Showcase image
 
-The abdominal CT view is derived from [FDG-PET-CT-Lesions](https://doi.org/10.7937/gkr0-xv29),
-Gatidis et al., The Cancer Imaging Archive. Open images are licensed
-[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+The abdominal CT view is rendered from the public defaced images in: Gatidis,
+S. and Kuestner, T. (2022), *A whole-body FDG-PET/CT dataset with manually
+annotated tumor lesions (FDG-PET-CT-Lesions)*, Version 2, The Cancer Imaging
+Archive, [doi:10.7937/gkr0-xv29](https://doi.org/10.7937/gkr0-xv29). The
+defaced images are licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 The PET overlay and uptake focus are simulated with this package and do not represent measured PET.

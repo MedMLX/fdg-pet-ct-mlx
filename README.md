@@ -13,7 +13,7 @@ Generate synthetic FDG PET activity from CT and organ labels with native MLX. In
 ```bash
 uv venv --python 3.13
 source .venv/bin/activate
-uv pip install "fdg-pet-ct-mlx>=0.2.4"
+uv pip install "fdg-pet-ct-mlx>=0.2.5"
 ```
 
 ## MedMLX runner
@@ -34,14 +34,14 @@ print(result["outputs"]["pet"])
 ```
 
 The runner validates the image geometry and caller-supplied profiles, then writes
-`pet.nii.gz` on the CT grid. See the [profile format and array API](docs/technical.md)
+`pet.nii.gz` on the CT grid. See the [profile format and array API](https://github.com/MedMLX/fdg-pet-ct-mlx/blob/main/docs/technical.md)
 for required fields and a synthetic tensor example.
 
 No model weights are needed. This is image-space synthesis; it does not simulate projection physics or reconstruction.
 
 ## Documentation
 
-[Profiles, array API and validation](docs/technical.md)
+[Profiles, array API and validation](https://github.com/MedMLX/fdg-pet-ct-mlx/blob/main/docs/technical.md)
 
 ## License
 
