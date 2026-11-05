@@ -154,16 +154,11 @@ preset. Profiles are duck-typed; `fdg_pet_ct_mlx.profiles` documents the attribu
   attenuation), a scatter and randoms offset, a separable Gaussian blur (zero-padded,
   truncated at 3 sigma) and a Gaussian approximation to count noise. Its arrays must
   be 3D with matching shapes.
-- `apply_lesion_uptake` sets avid-label voxels to the host tissue mean times
-  `tumor_to_background`, with optional multiplicative noise, a necrotic core at 0.2
-  times the host mean and Gaussian spill-over. Each avid label needs a host tissue.
-  With no avid voxels it returns the activity unchanged, or raises if necrosis is
-  requested.
 
 `spacing_mm` and `fwhm_mm` follow array-axis order, whatever the orientation. Matching
 shapes do not prove alignment; the caller owns registration. Each noisy step draws one
-MLX normal field from `mx.random.key(seed)`; `apply_lesion_uptake` draws only when
-`heterogeneity > 0`. The result is an MLX float32 SUV array on the input grid.
+MLX normal field from `mx.random.key(seed)`. The result is an MLX float32 SUV array
+on the input grid.
 
 ## License
 

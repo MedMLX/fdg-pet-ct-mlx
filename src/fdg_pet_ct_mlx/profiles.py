@@ -1,8 +1,8 @@
-"""Structural (duck-typed) profile inputs for activity, scanner and lesion settings.
+"""Structural (duck-typed) profile inputs for activity and scanner settings.
 
 The package ships no profile data. Callers pass objects with these attributes;
-the acquisition function validates scanner values, while activity and lesion
-functions document their own input requirements. The registered
+the acquisition function validates scanner values, while the activity function
+documents its own input requirements. The registered
 ``fdg_pet_ct_mlx.medmlx`` adapter reads and validates caller-supplied JSON profiles.
 Label IDs use the NV-Generate/MAISI vocabulary. SUV values follow the body-weight
 convention, but no weight or dose normalization is applied here.
@@ -83,47 +83,4 @@ class FdgScannerProfile(Protocol):
     @property
     def counts_per_suv(self) -> float:
         """Return positive finite expected counts per voxel per SUV unit at ``count_level=1``."""
-        ...
-
-
-class FdgLesionProfile(Protocol):
-    """FDG-avid lesion settings.
-
-    Attributes:
-        avid_maisi_labels: MAISI label IDs whose voxels are treated as FDG-avid lesion.
-        host_tissue: Maps each avid label ID to a key of ``FdgOrganProfile.tissues``;
-            that tissue's ``suv_mean`` is the voxel's host (background) SUV. Every
-            configured avid label must have a host entry.
-        tumor_to_background: Finite nonnegative lesion mean SUV as a multiple of host SUV.
-        heterogeneity: Finite nonnegative relative standard deviation of multiplicative
-            Gaussian noise on lesion voxels; 0 disables it.
-        necrosis_fraction: Target fraction in [0, 1] (by voxel count, over all avid
-            voxels) of the lesion set to the necrotic core; 0 disables it.
-        spillover_fwhm_mm: Finite nonnegative FWHM in mm of an isotropic Gaussian that
-            spreads the lesion's excess SUV into neighboring voxels; 0 disables it.
-    """
-
-    @property
-    def avid_maisi_labels(self) -> tuple[int, ...]:
-        """Return the MAISI label IDs whose voxels are treated as FDG-avid lesion."""
-        ...
-    @property
-    def host_tissue(self) -> Mapping[int, str]:
-        """Map each avid label ID to a key of ``FdgOrganProfile.tissues``."""
-        ...
-    @property
-    def tumor_to_background(self) -> float:
-        """Return the lesion mean SUV as a finite nonnegative multiple of host SUV."""
-        ...
-    @property
-    def heterogeneity(self) -> float:
-        """Return the relative standard deviation of multiplicative lesion noise."""
-        ...
-    @property
-    def necrosis_fraction(self) -> float:
-        """Return the target necrotic-core fraction of avid voxels, by voxel count."""
-        ...
-    @property
-    def spillover_fwhm_mm(self) -> float:
-        """Return the finite nonnegative isotropic spill-over Gaussian FWHM in mm."""
         ...
