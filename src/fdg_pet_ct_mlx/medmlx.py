@@ -293,7 +293,7 @@ def run(
 
 
 def readiness() -> dict[str, object]:
-    """Check optional packages; profiles and input contents are validated by run."""
+    """Check installed package metadata; profiles and input contents are validated by run."""
     try:
         version("fdg-pet-ct-mlx")
         version("nibabel")
