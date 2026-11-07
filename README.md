@@ -20,6 +20,8 @@ Generate synthetic FDG PET activity from CT and organ labels with native MLX. In
 | :--- | :--- |
 | Aligned CT + organ labels + profiles | Synthetic PET SUV volume |
 
+No model weights to download. Peak MLX memory: 2.7 GB for a 400×400×284 whole-body CT.
+
 ## Use with MedMLX
 
 The [MedMLX MCP server](https://github.com/MedMLX/medmlx/blob/main/docs/mcp.md) is the lowest-friction way to use this model. It installs this runtime, and lets an AI agent describe, check and run `fdg-pet-ct` for you.

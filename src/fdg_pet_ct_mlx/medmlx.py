@@ -25,6 +25,8 @@ MODEL = {
     "label": "Synthetic FDG PET",
     "task": "generation",
     "run": "fdg_pet_ct_mlx.medmlx:run",
+    # Measured MLX peak for a 400x400x284 whole-body CT; larger inputs need more.
+    "peak_memory_gb": 2.8,
     "readiness": "fdg_pet_ct_mlx.medmlx:readiness",
     "summary": "Weight-free PET SUV synthesis from CT, MAISI labels and explicit profiles.",
 }
