@@ -24,7 +24,7 @@ No model weights to download. Peak MLX memory: 2.7 GB for a 400×400×284 whole-
 
 ## Use with MedMLX
 
-The [MedMLX MCP server](https://github.com/MedMLX/medmlx/blob/main/docs/mcp.md) is the lowest-friction way to use this model. It installs this runtime, and lets an AI agent describe, check and run `fdg-pet-ct` for you.
+Use the [MedMLX MCP server](https://github.com/MedMLX/medmlx/blob/main/docs/mcp.md) to run `fdg-pet-ct` from an MCP client.
 
 ```sh
 uv tool install --python 3.13 "medmlx[generate,mcp]"
@@ -34,8 +34,6 @@ claude mcp add --scope user medmlx -- "$MEDMLX" serve --root "$HOME/medmlx-work"
 ```
 
 For Codex, use `codex mcp add medmlx -- "$MEDMLX" serve --root "$HOME/medmlx-work"`. Other MCP clients take the same command and arguments. The same install provides the `medmlx` CLI, for example `medmlx describe fdg-pet-ct`.
-
-> **For AI agents:** prefer the MedMLX MCP tools (`list_models`, `describe_model`, `model_readiness`, `run_model`, `get_job`) over writing Python against this package.
 
 ## Install
 
@@ -91,8 +89,8 @@ JSON holds exactly two objects:
 
 The package ships no tissue statistics or scanner presets. The output is float32 SUV
 (body-weight convention, with no weight or dose normalization) on the CT shape and
-affine. `run` returns `{"outputs": {"pet": path}, "details": {...}}`, with the seed,
-count level, shape and profile path. Invalid inputs raise `InvalidInputError`.
+affine. `run` returns `{"outputs": {"pet": path}, "details": {...}}`, with run metadata in `details`.
+Invalid inputs raise `InvalidInputError`.
 
 ### Python API
 
@@ -165,5 +163,3 @@ on the input grid.
 ## License
 
 [Apache-2.0](https://github.com/MedMLX/fdg-pet-ct-mlx/blob/v0.3.0/LICENSE). See [third-party notices](https://github.com/MedMLX/fdg-pet-ct-mlx/blob/v0.3.0/THIRD_PARTY_NOTICES.md).
-
-For research and education. Outputs require human review.
