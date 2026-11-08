@@ -265,6 +265,8 @@ def run(
     destination.parent.mkdir(parents=True, exist_ok=True)
     header = ct.header.copy()
     header.set_data_dtype(np.float32)
+    # cal_min/cal_max are the CT's display range in HU; zero marks them unset for SUV.
+    header["cal_min"], header["cal_max"] = 0.0, 0.0
     output = type(ct)(result, affine, header)
     with tempfile.NamedTemporaryFile(
         dir=destination.parent,

@@ -28,6 +28,8 @@ def fdg_inputs(tmp_path: Path) -> FdgInputs:
     for name, data in (("ct", np.zeros((4, 5, 6))), ("labels", np.ones((4, 5, 6)))):
         image = nib.Nifti1Image(data.astype(np.float32), affine)
         image.header.set_xyzt_units("mm")
+        # A CT display range in HU must not label the SUV output.
+        image.header["cal_min"], image.header["cal_max"] = -1024.0, 3071.0
         nib.save(image, tmp_path / f"{name}.nii.gz")
     profile: dict[str, object] = {
         "tissues": {
@@ -65,6 +67,7 @@ def test_fdg_runner_preserves_geometry(fdg_inputs: FdgInputs) -> None:
     assert output.shape == (4, 5, 6)
     assert output.get_data_dtype() == np.dtype(np.float32)
     np.testing.assert_array_equal(output.affine, source.affine)
+    assert (float(output.header["cal_min"]), float(output.header["cal_max"])) == (0.0, 0.0)
     # A zero activity profile must remain zero through the real acquisition path.
     np.testing.assert_array_equal(output.get_fdata(), np.zeros((4, 5, 6)))
 
