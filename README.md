@@ -20,7 +20,9 @@ Generate synthetic FDG PET activity from CT and organ labels with native MLX. In
 | :--- | :--- |
 | Aligned CT + organ labels + profiles | Synthetic PET SUV volume |
 
-No model weights to download. Peak MLX memory: 2.7 GB for a 400×400×284 whole-body CT.
+| Model | Weights download | Peak MLX memory | Measured on |
+| :--- | ---: | ---: | :--- |
+| `fdg-pet-ct` | None | 2.7 GB | 400×400×284 whole-body CT |
 
 ## Use with MedMLX
 
@@ -65,7 +67,8 @@ print(result["outputs"]["pet"])
 The runner validates the image geometry and caller-supplied profiles, then writes
 `pet.nii.gz` on the CT grid.
 
-No model weights are needed. This is image-space synthesis; it does not simulate projection physics or reconstruction.
+No model weights are needed. This is image-space synthesis; it does not simulate
+projection physics or reconstruction.
 
 ### Inputs and outputs
 
@@ -79,20 +82,25 @@ No model weights are needed. This is image-space synthesis; it does not simulate
 | `seed` | Integer in [0, 4294967294]; activity uses `seed`, acquisition `seed + 1` |
 | `overwrite` | `False` by default; an existing `pet.nii.gz` is never replaced |
 
-Arguments are keyword-only. Volumes are never registered or resampled. The profile
-JSON holds exactly two objects:
+Arguments are keyword-only. Volumes are never registered or resampled.
 
-- `tissues`, keyed by tissue name. Each has finite nonnegative `suv_mean` and
-  `suv_std`, and a `maisi_labels` list of integer IDs in [0, 200], unique across
-  tissues. `unclassified_soft_tissue` is required and covers unlisted labels.
-- `scanner`, with `scatter_fraction` and `randoms_fraction` in [0, 1], three finite
-  nonnegative `fwhm_mm` values in array-axis order, and a finite positive
-  `counts_per_suv`. Its product with `count_level` must be a positive normal float32.
+The profile JSON holds exactly two objects. The package ships no tissue statistics or
+scanner presets.
 
-The package ships no tissue statistics or scanner presets. The output is float32 SUV
-(body-weight convention, with no weight or dose normalization) on the CT shape and
-affine. `run` returns `{"outputs": {"pet": path}, "details": {...}}`, with run metadata in `details`.
-Invalid inputs raise `InvalidInputError`.
+| Object | Field | Requirement |
+| :--- | :--- | :--- |
+| `tissues` | One entry per tissue name | `unclassified_soft_tissue` is required and covers unlisted labels |
+| | `suv_mean`, `suv_std` | Finite and nonnegative |
+| | `maisi_labels` | Integer IDs in [0, 200], unique across tissues |
+| `scanner` | `scatter_fraction`, `randoms_fraction` | In [0, 1] |
+| | `fwhm_mm` | Three finite nonnegative values in array-axis order |
+| | `counts_per_suv` | Finite and positive; its product with `count_level` must be a positive normal float32 |
+
+- **Output:** float32 SUV (body-weight convention, with no weight or dose normalization)
+  on the CT shape and affine.
+- **Return value:** `{"outputs": {"pet": path}, "details": {...}}`, with run metadata in
+  `details`.
+- **Errors:** invalid inputs raise `InvalidInputError`.
 
 ### Python API
 
@@ -151,16 +159,18 @@ preset. Profiles are duck-typed; `fdg_pet_ct_mlx.profiles` documents the attribu
 
 - `synthesize_activity_map` maps 3D integer or integral float MAISI labels in
   [0, 2³¹ − 1] to SUV. Boolean, complex and invalid label volumes raise `ValueError`.
-- `apply_acquisition_model` applies, in order, the CT factor
-  `exp(-0.02 * clip((HU + 1000) / 1000, 0, 3))` (a fixed heuristic, not measured
-  attenuation), a scatter and randoms offset, a separable Gaussian blur (zero-padded,
-  truncated at 3 sigma) and a Gaussian approximation to count noise. Its arrays must
-  be 3D with matching shapes.
+- `apply_acquisition_model` applies, in order:
+  1. the CT factor `exp(-0.02 * clip((HU + 1000) / 1000, 0, 3))`, a fixed heuristic, not
+     measured attenuation;
+  2. a scatter and randoms offset;
+  3. a separable Gaussian blur, zero-padded and truncated at 3 sigma;
+  4. a Gaussian approximation to count noise.
 
-`spacing_mm` and `fwhm_mm` follow array-axis order, whatever the orientation. Matching
-shapes do not prove alignment; the caller owns registration. Each noisy step draws one
-MLX normal field from `mx.random.key(seed)`. The result is an MLX float32 SUV array
-on the input grid.
+  Its arrays must be 3D with matching shapes.
+- `spacing_mm` and `fwhm_mm` follow array-axis order, whatever the orientation. Matching
+  shapes do not prove alignment; the caller owns registration.
+- Each noisy step draws one MLX normal field from `mx.random.key(seed)`. The result is an
+  MLX float32 SUV array on the input grid.
 
 ## License
 
