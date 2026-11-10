@@ -17,6 +17,8 @@ from medmlx_core.errors import InvalidInputError, MissingDependencyError, ModelE
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
+    from nibabel import Nifti1Image
+
     from fdg_pet_ct_mlx._typing import FdgRuntime
 
 MODEL = {
@@ -149,6 +151,34 @@ def _profiles(path: Path) -> tuple[Organs, Scanner]:
     )
 
 
+def _load_label_ids(image: Nifti1Image) -> NDArray[np.uint8]:
+    """Validate scaled source values in FP64 slabs and retain only uint8 MAISI IDs.
+
+    The image's persistent proxy reads increasing contiguous z slabs, so compressed
+    NIfTI data is not reopened and decompressed from the start for every chunk.
+    Float64 validation preserves fractions that would disappear in float32.
+    """
+    shape = image.shape
+    ids = np.empty(shape, dtype=np.uint8, order="F")
+    # Target 8 MiB of FP64 values per chunk, with at least one XY plane.
+    depth = max(1, (8 * 1024**2) // (shape[0] * shape[1] * 8))
+    for start in range(0, shape[2], depth):
+        section = (slice(None), slice(None), slice(start, start + depth))
+        source = image.dataobj[section]
+        if source.dtype.kind not in "iuf":
+            raise InvalidInputError("MAISI labels must be finite integer IDs in [0, 200]")
+        values = np.asarray(source, dtype=np.float64)
+        if (
+            not np.isfinite(values).all()
+            or (values < 0).any()
+            or (values > 200).any()
+            or (values != np.floor(values)).any()
+        ):
+            raise InvalidInputError("MAISI labels must be finite integer IDs in [0, 200]")
+        ids[section] = values
+    return ids
+
+
 def run(
     *,
     image_path: str,
@@ -215,7 +245,7 @@ def run(
         ) from error
     try:
         ct = nib.load(image)
-        segmentation = nib.load(labels)
+        segmentation = nib.load(labels, keep_file_open=True)
     except (OSError, ValueError) as error:
         raise InvalidInputError(f"Cannot load CT/labels NIfTI: {error}") from error
     if not isinstance(ct, nib.Nifti1Image | nib.Nifti2Image) or not isinstance(
@@ -227,30 +257,26 @@ def run(
     if ct.affine is None or segmentation.affine is None:
         raise InvalidInputError("CT and labels require an affine")
     hu = ct.get_fdata(dtype=np.float32)
-    ids = segmentation.get_fdata(dtype=np.float64)
     affine = ct.affine
     if hu.ndim != 3 or not hu.size or not np.isfinite(hu).all():
         raise InvalidInputError("CT must be a nonempty finite scalar 3-D volume in HU")
-    if ids.shape != hu.shape or not np.allclose(affine, segmentation.affine, atol=1e-5, rtol=0):
-        raise InvalidInputError("CT and labels must share shape and affine; no resampling occurs")
-    if (
-        not np.isfinite(ids).all()
-        or (ids < 0).any()
-        or (ids > 200).any()
-        or (ids != np.floor(ids)).any()
+    if segmentation.shape != hu.shape or not np.allclose(
+        affine, segmentation.affine, atol=1e-5, rtol=0
     ):
-        raise InvalidInputError("MAISI labels must be finite integer IDs in [0, 200]")
+        raise InvalidInputError("CT and labels must share shape and affine; no resampling occurs")
+    ids = _load_label_ids(segmentation)
+    del segmentation
     spacing = np.linalg.norm(affine[:3, :3], axis=0)
     if not np.isfinite(affine).all() or np.linalg.det(affine[:3, :3]) == 0 or (spacing <= 0).any():
         raise InvalidInputError("CT affine must be finite, nonsingular and have positive spacing")
     from medmlx_core.runtime import import_mlx
 
-    from fdg_pet_ct_mlx.acquisition import apply_acquisition_model
-    from fdg_pet_ct_mlx.activity import synthesize_activity_map
+    from fdg_pet_ct_mlx._core import acquire_activity, sample_activity
 
     mx = cast("FdgRuntime", import_mlx())
-    activity = synthesize_activity_map(mx.array(ids.astype(np.int32)), organs, seed=seed, mx=mx)
-    pet = apply_acquisition_model(
+    activity = sample_activity(mx.array(ids).astype(mx.int32), organs, seed=seed, mx=mx)
+    del ids
+    pet = acquire_activity(
         activity,
         mx.array(hu),
         scanner=scanner,
@@ -258,6 +284,7 @@ def run(
         spacing_mm=(float(spacing[0]), float(spacing[1]), float(spacing[2])),
         seed=seed + 1,
         mx=mx,
+        validate_ct=False,
     )
     result: NDArray[np.float32] = np.asarray(pet, dtype=np.float32)
     if result.shape != hu.shape or not np.isfinite(result).all() or (result < 0).any():

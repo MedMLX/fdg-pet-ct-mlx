@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
+from fdg_pet_ct_mlx._core import acquire_activity
 from fdg_pet_ct_mlx._typing import FdgRuntime
 from fdg_pet_ct_mlx.profiles import FdgScannerProfile
 
@@ -84,39 +85,10 @@ def apply_acquisition_model(
         ValueError: If the grids, input voxels, scanner parameters, count scale or
             resulting SUV values are invalid.
     """
-
-    if activity.ndim != 3 or activity.size == 0 or activity.shape != ct_hu.shape:
-        raise ValueError("activity and CT must share the same 3D grid and be nonempty")
-    fractions = (scanner.scatter_fraction, scanner.randoms_fraction)
-    if any(not math.isfinite(value) or not 0.0 <= value <= 1.0 for value in fractions):
-        raise ValueError("scatter and randoms fractions must be finite and in [0, 1]")
-    counts_per = validate_count_scale(scanner.counts_per_suv, count_level)
-    valid_activity = mx.all(mx.isfinite(activity) & (activity >= 0))
-    valid_ct = mx.all(mx.isfinite(ct_hu))
-    mx.eval(valid_activity, valid_ct)
-    if not bool(valid_activity.item()):
-        raise ValueError("activity voxels must be finite and nonnegative")
-    if not bool(valid_ct.item()):
-        raise ValueError("CT voxels must be finite")
-    hu = ct_hu.astype(mx.float32)
-    shifted = (hu + mx.array(1000.0, dtype=mx.float32)) / mx.array(1000.0, dtype=mx.float32)
-    mu = mx.clip(shifted, 0.0, 3.0)
-    residual = mx.exp(mx.array(-0.02, dtype=mx.float32) * mu)
-    volume = activity.astype(mx.float32) * residual
-    floor_fraction = scanner.scatter_fraction + scanner.randoms_fraction
-    if floor_fraction > 0.0:
-        volume = volume + mx.mean(volume) * mx.array(floor_fraction, dtype=mx.float32)
-    volume = gaussian_blur(volume, scanner.fwhm_mm, spacing_mm, mx)
-    lam = volume * mx.array(counts_per, dtype=mx.float32)
-    noise = mx.random.normal(volume.shape, dtype=mx.float32, key=mx.random.key(seed))
-    zero = mx.array(0.0, dtype=mx.float32)
-    counts = mx.maximum(lam + mx.sqrt(mx.maximum(lam, 0.0)) * noise, zero)
-    suv = counts / mx.array(counts_per, dtype=mx.float32)
-    finite = mx.all(mx.isfinite(suv))
-    mx.eval(suv, finite)
-    if not bool(finite.item()):
-        raise ValueError("acquisition produced non-finite SUV values")
-    return suv
+    return acquire_activity(
+        activity, ct_hu, scanner=scanner, count_level=count_level,
+        spacing_mm=spacing_mm, seed=seed, mx=mx, validate_ct=True,
+    )
 
 
 def gaussian_blur(
@@ -180,6 +152,5 @@ def _smooth_axis(volume: array, kernel: array, axis: int, mx: FdgRuntime) -> arr
     flat = mx.reshape(moved, (-1, length, 1))
     weight = mx.reshape(kernel, (1, -1, 1))
     pad = kernel.shape[0] // 2
-    padded = mx.pad(flat, [(0, 0), (pad, pad), (0, 0)])
-    out = mx.conv1d(padded, weight)
+    out = mx.conv1d(flat, weight, padding=pad)
     return mx.moveaxis(mx.reshape(out, moved.shape), -1, axis)

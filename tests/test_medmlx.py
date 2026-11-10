@@ -86,3 +86,62 @@ def test_fdg_rejects_invalid_arguments(fdg_inputs: FdgInputs, problem: str) -> N
         (Path(fdg_inputs["output_dir"]) / "pet.nii.gz").write_bytes(b"existing output")
     with pytest.raises(InvalidInputError):
         run(**fdg_inputs, count_level=count_level, overwrite=overwrite)
+
+
+@pytest.mark.parametrize("suffix", [".nii", ".nii.gz"])
+@pytest.mark.parametrize("value", [1.0 + 2.0**-30, float("nan"), float("inf"), -1.0, 201.0])
+def test_fdg_rejects_invalid_source_labels(
+    fdg_inputs: FdgInputs, suffix: str, value: float
+) -> None:
+    """Validate source precision before compacting label IDs or entering Metal."""
+    source = nib.load(fdg_inputs["labels_path"])
+    assert isinstance(source, nib.Nifti1Image)
+    values = np.ones(source.shape, dtype=np.float64)
+    values[-1, -1, -1] = value
+    labels = nib.Nifti1Image(values, source.affine, source.header)
+    labels.header.set_data_dtype(np.float64)
+    path = Path(fdg_inputs["labels_path"]).with_name("invalid" + suffix)
+    nib.save(labels, path)
+    fdg_inputs["labels_path"] = str(path)
+    with pytest.raises(InvalidInputError, match="finite integer IDs"):
+        run(**fdg_inputs)
+
+
+def test_fdg_rejects_fractional_nifti_scaling(fdg_inputs: FdgInputs) -> None:
+    """A sub-float32 fractional intercept cannot turn an integer source into valid IDs."""
+    source = nib.load(fdg_inputs["labels_path"])
+    assert isinstance(source, nib.Nifti1Image)
+    labels = nib.Nifti1Image(np.ones(source.shape, dtype=np.int16), source.affine, source.header)
+    labels.header.set_data_dtype(np.int16)
+    labels.header["scl_slope"], labels.header["scl_inter"] = 1.0, 2.0**-30
+    nib.save(labels, fdg_inputs["labels_path"])
+    with pytest.raises(InvalidInputError, match="finite integer IDs"):
+        run(**fdg_inputs)
+
+
+@pytest.mark.parametrize("suffix", [".nii", ".nii.gz"])
+def test_scaled_labels_preserve_seeded_pet(fdg_inputs: FdgInputs, suffix: str) -> None:
+    """Accept exact scaled IDs and preserve their nonzero seeded tissue activity."""
+    profile_path = Path(fdg_inputs["profile_path"])
+    profile = cast(dict[str, object], json.loads(profile_path.read_text()))
+    tissues = cast(dict[str, object], profile["tissues"])
+    tissues["organ"] = {"suv_mean": 2.0, "suv_std": 0.3, "maisi_labels": [1]}
+    profile_path.write_text(json.dumps(profile))
+    original = run(**fdg_inputs, seed=17)
+    expected = nib.load(cast(dict[str, str], original["outputs"])["pet"])
+    assert isinstance(expected, nib.Nifti1Image)
+    reference = expected.get_fdata(dtype=np.float32)
+    assert (reference > 0).any()
+    source = nib.load(fdg_inputs["labels_path"])
+    assert isinstance(source, nib.Nifti1Image)
+    labels = nib.Nifti1Image(np.full(source.shape, 2, dtype=np.int16), source.affine, source.header)
+    labels.header.set_data_dtype(np.int16)
+    labels.header["scl_slope"], labels.header["scl_inter"] = 0.5, 0.0
+    path = Path(fdg_inputs["labels_path"]).with_name("scaled" + suffix)
+    nib.save(labels, path)
+    fdg_inputs["labels_path"] = str(path)
+    fdg_inputs["output_dir"] += "-scaled"
+    actual = run(**fdg_inputs, seed=17)
+    image = nib.load(cast(dict[str, str], actual["outputs"])["pet"])
+    assert isinstance(image, nib.Nifti1Image)
+    np.testing.assert_array_equal(image.get_fdata(dtype=np.float32), reference)

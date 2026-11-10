@@ -4,15 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
+from fdg_pet_ct_mlx._core import sample_activity
 from fdg_pet_ct_mlx._typing import FdgRuntime
 from fdg_pet_ct_mlx.profiles import FdgOrganProfile
 
 if TYPE_CHECKING:
     from mlx.core import array
 
-# MAISI label IDs run 0..200 (200 is the body envelope label in mlx-generate-ctmr masks), so the
-# lookup tables always cover at least that range.
-_LOOKUP_MIN = 201
 
 
 def validated_label_ids(labels: array, mx: FdgRuntime, *, context: str) -> array:
@@ -27,13 +25,18 @@ def validated_label_ids(labels: array, mx: FdgRuntime, *, context: str) -> array
         raise ValueError(f"{context} labels must be nonempty")
     if labels.dtype == mx.complex64 or labels.dtype == mx.bool_:
         raise ValueError(f"{context} labels must contain real integral identifiers")
-    if not bool(mx.all(mx.isfinite(labels)).item()):
+    finite = mx.all(mx.isfinite(labels))
+    lowest = mx.min(labels)
+    highest = mx.max(labels)
+    integral = mx.all(labels == mx.floor(labels))
+    mx.eval(finite, lowest, highest, integral)
+    if not bool(finite.item()):
         raise ValueError(f"{context} labels must be finite")
-    lowest = cast(int | float, mx.min(labels).item())
-    highest_value = cast(int | float, mx.max(labels).item())
-    if lowest < 0 or highest_value > 2**31 - 1:
+    lowest_value = cast(int | float, lowest.item())
+    highest_value = cast(int | float, highest.item())
+    if lowest_value < 0 or highest_value > 2**31 - 1:
         raise ValueError(f"{context} labels must be in the nonnegative int32 range")
-    if not bool(mx.all(labels == mx.floor(labels)).item()):
+    if not bool(integral.item()):
         raise ValueError(f"{context} labels must be integral")
     return labels.astype(mx.int32)
 
@@ -74,27 +77,4 @@ def synthesize_activity_map(
     """
 
     ids = validated_label_ids(labels, mx, context="activity")
-    profile_labels = [label for spec in profile.tissues.values() for label in spec.maisi_labels]
-    size = max(max(profile_labels, default=0) + 1, _LOOKUP_MIN)
-    # Send every ID >= size to one extra table slot holding the unclassified values, so
-    # table size does not depend on the largest input ID.
-    ids = mx.where(ids < size, ids, size)
-    default = profile.tissues["unclassified_soft_tissue"]
-    means = mx.array((*profile.lookup_table(size), default.suv_mean), dtype=mx.float32)
-    stds = mx.array((*_std_table(profile, size), default.suv_std), dtype=mx.float32)
-    base = means[ids]
-    noise = mx.random.normal(ids.shape, dtype=mx.float32, key=mx.random.key(seed))
-    activity = mx.maximum(base + stds[ids] * noise, mx.array(0.0, dtype=mx.float32))
-    mx.eval(activity)
-    return activity
-
-
-def _std_table(profile: FdgOrganProfile, size: int) -> tuple[float, ...]:
-    # Standard-deviation counterpart of ``profile.lookup_table(size)``.
-    unclassified = profile.tissues["unclassified_soft_tissue"].suv_std
-    table = [unclassified] * size
-    for spec in profile.tissues.values():
-        for label in spec.maisi_labels:
-            if label < size:
-                table[label] = spec.suv_std
-    return tuple(table)
+    return sample_activity(ids, profile, seed=seed, mx=mx)
