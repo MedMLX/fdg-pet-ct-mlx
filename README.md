@@ -10,7 +10,7 @@ Generate synthetic FDG PET activity from CT and organ labels with native MLX. In
 [![Apple Silicon](https://img.shields.io/badge/Apple_Silicon-MLX-black?logo=apple)](https://github.com/ml-explore/mlx)
 [![MedMLX](https://img.shields.io/badge/MedMLX-runtime-A51C30)](https://github.com/MedMLX/medmlx)
 
-<img src="https://raw.githubusercontent.com/MedMLX/fdg-pet-ct-mlx/v0.3.0/docs/showcase.png" alt="Synthetic FDG PET generated from CT and organ labels" width="100%">
+<img src="https://raw.githubusercontent.com/MedMLX/fdg-pet-ct-mlx/main/docs/showcase.png" alt="Synthetic FDG PET generated from CT and organ labels" width="100%">
 
 </div>
 
