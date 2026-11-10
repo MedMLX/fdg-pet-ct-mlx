@@ -24,21 +24,6 @@ Generate synthetic FDG PET activity from CT and organ labels with native MLX. In
 | :--- | ---: | ---: | :--- |
 | `fdg-pet-ct` | None | 2.7 GB | 400×400×284 whole-body CT |
 
-## Use with MedMLX
-
-Use the [MedMLX MCP server](https://github.com/MedMLX/medmlx/blob/main/docs/mcp.md) to run `fdg-pet-ct` from an MCP client.
-
-```sh
-uv tool install --python 3.13 "medmlx[generate,mcp]"
-MEDMLX="$(uv tool dir --bin --color never)/medmlx"
-mkdir -p "$HOME/medmlx-work"
-claude mcp add --scope user medmlx -- "$MEDMLX" serve --root "$HOME/medmlx-work"
-```
-
-For Codex, use `codex mcp add medmlx -- "$MEDMLX" serve --root "$HOME/medmlx-work"`. Other MCP clients take the same command and arguments. The same install provides the `medmlx` CLI, for example `medmlx describe fdg-pet-ct`.
-
-> **For AI agents:** prefer the MedMLX MCP tools (`list_models`, `describe_model`, `model_readiness`, `run_model`, `get_job`) over writing Python against this package.
-
 ## Install
 
 ```bash
@@ -171,6 +156,21 @@ preset. Profiles are duck-typed; `fdg_pet_ct_mlx.profiles` documents the attribu
   shapes do not prove alignment; the caller owns registration.
 - Each noisy step draws one MLX normal field from `mx.random.key(seed)`. The result is an
   MLX float32 SUV array on the input grid.
+
+## Use with MedMLX
+
+Use the [MedMLX MCP server](https://github.com/MedMLX/medmlx/blob/main/docs/mcp.md) to run `fdg-pet-ct` from an MCP client.
+
+```sh
+uv tool install --python 3.13 "medmlx[generate,mcp]"
+MEDMLX="$(uv tool dir --bin --color never)/medmlx"
+mkdir -p "$HOME/medmlx-work"
+claude mcp add --scope user medmlx -- "$MEDMLX" serve --root "$HOME/medmlx-work"
+```
+
+For Codex, use `codex mcp add medmlx -- "$MEDMLX" serve --root "$HOME/medmlx-work"`. Other MCP clients take the same command and arguments. The same install provides the `medmlx` CLI, for example `medmlx describe fdg-pet-ct`.
+
+> **For AI agents:** prefer the MedMLX MCP tools (`list_models`, `describe_model`, `model_readiness`, `run_model`, `get_job`) over writing Python against this package.
 
 ## License
 
