@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import TypedDict, cast
 
@@ -23,9 +24,18 @@ class FdgInputs(TypedDict):
 
 @pytest.fixture
 def fdg_inputs(tmp_path: Path) -> FdgInputs:
+    cache = Path.home() / ".cache" / "medmlx" / "test-data"
+    ct_path = os.environ.get("MEDMLX_TEST_CT", str(cache / "hcc_063_ct.nii.gz"))
+    mask_path = os.environ.get("MEDMLX_TEST_MASK", str(cache / "hcc_063_liver.nii.gz"))
+    ct, mask = nib.load(ct_path), nib.load(mask_path)
+    assert isinstance(ct, nib.Nifti1Image) and isinstance(mask, nib.Nifti1Image)
+    assert ct.affine is not None and mask.affine is not None
+    assert ct.shape == mask.shape and np.allclose(ct.affine, mask.affine)
+    crop = np.s_[150:154, 250:255, 40:46]
     affine = np.diag([2.0, 3.0, 4.0, 1.0])
     affine[:3, 3] = [-10, 20, 5]
-    for name, data in (("ct", np.zeros((4, 5, 6))), ("labels", np.ones((4, 5, 6)))):
+    for name, data in (("ct", np.asarray(ct.dataobj)[crop]),
+                       ("labels", np.asarray(mask.dataobj)[crop])):
         image = nib.Nifti1Image(data.astype(np.float32), affine)
         image.header.set_xyzt_units("mm")
         # A CT display range in HU must not label the SUV output.
@@ -134,7 +144,8 @@ def test_scaled_labels_preserve_seeded_pet(fdg_inputs: FdgInputs, suffix: str) -
     assert (reference > 0).any()
     source = nib.load(fdg_inputs["labels_path"])
     assert isinstance(source, nib.Nifti1Image)
-    labels = nib.Nifti1Image(np.full(source.shape, 2, dtype=np.int16), source.affine, source.header)
+    values = np.asarray(source.dataobj, dtype=np.int16) * 2
+    labels = nib.Nifti1Image(values, source.affine, source.header)
     labels.header.set_data_dtype(np.int16)
     labels.header["scl_slope"], labels.header["scl_inter"] = 0.5, 0.0
     path = Path(fdg_inputs["labels_path"]).with_name("scaled" + suffix)

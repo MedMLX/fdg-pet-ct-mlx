@@ -1,10 +1,14 @@
 """Gaussian blur against SciPy's zero-padded Gaussian filter as an independent reference."""
 
 import math
+import os
 from dataclasses import replace
+from pathlib import Path
 from typing import cast
 
+import nibabel as nib
 import numpy as np
+import numpy.typing as npt
 import pytest
 from medmlx_core.runtime import import_mlx
 from scipy.ndimage import gaussian_filter
@@ -13,6 +17,22 @@ from fdg_pet_ct_mlx._typing import FdgRuntime
 from fdg_pet_ct_mlx.acquisition import apply_acquisition_model, gaussian_blur
 from fdg_pet_ct_mlx.activity import synthesize_activity_map
 from fdg_pet_ct_mlx.medmlx import Organs, Scanner, Tissue
+
+
+@pytest.fixture(scope="module")
+def real_ct_and_liver() -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+    """Load aligned HCC-TACE CT and liver crops for acquisition checks."""
+    root = Path.home() / ".cache/medmlx/test-data"
+    ct = nib.load(os.environ.get("MEDMLX_TEST_CT", str(root / "hcc_063_ct.nii.gz")))
+    liver = nib.load(os.environ.get("MEDMLX_TEST_MASK", str(root / "hcc_063_liver.nii.gz")))
+    assert isinstance(ct, nib.Nifti1Image) and isinstance(liver, nib.Nifti1Image)
+    assert ct.affine is not None and liver.affine is not None
+    assert ct.shape == liver.shape and np.allclose(ct.affine, liver.affine)
+    region = (slice(120, 127), slice(220, 228), slice(60, 69))
+    return (
+        np.asarray(ct.dataobj, dtype=np.float32)[region].copy(),
+        np.asarray(liver.dataobj, dtype=np.float32)[region].copy(),
+    )
 
 
 @pytest.mark.parametrize(
@@ -27,10 +47,12 @@ from fdg_pet_ct_mlx.medmlx import Organs, Scanner, Tissue
     ],
 )
 def test_blur_matches_scipy_zero_padding(
-    fwhm: tuple[float, float, float], spacing: tuple[float, float, float]
+    fwhm: tuple[float, float, float],
+    spacing: tuple[float, float, float],
+    real_ct_and_liver: tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]],
 ) -> None:
     mx = cast(FdgRuntime, import_mlx())
-    values = np.random.default_rng(21).normal(size=(7, 8, 9)).astype(np.float32)
+    values = real_ct_and_liver[0] / np.float32(1024)
     sigma = tuple(
         f / (2 * math.sqrt(2 * math.log(2))) / s for f, s in zip(fwhm, spacing, strict=True)
     )
@@ -43,10 +65,12 @@ def test_blur_matches_scipy_zero_padding(
 @pytest.mark.parametrize(
     "problem", ["boolean", "complex", "nonfinite", "negative", "range", "fraction", "empty", "ndim"]
 )
-def test_public_activity_rejects_invalid_labels(problem: str) -> None:
+def test_public_activity_rejects_invalid_labels(
+    problem: str, real_ct_and_liver: tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
+) -> None:
     """The independently callable activity API keeps validating native inputs."""
     mx = cast(FdgRuntime, import_mlx())
-    values = np.ones((2, 3, 4), dtype=np.float32)
+    values = real_ct_and_liver[1][:2, :3, :4].copy()
     if problem == "boolean":
         labels = mx.array(values, dtype=mx.bool_)
     elif problem == "complex":
@@ -57,7 +81,10 @@ def test_public_activity_rejects_invalid_labels(problem: str) -> None:
         labels = mx.array(values[0])
     else:
         values[0, 0, 0] = {
-            "nonfinite": float("nan"), "negative": -1.0, "range": 2.0**31, "fraction": 1.5,
+            "nonfinite": float("nan"),
+            "negative": -1.0,
+            "range": 2.0**31,
+            "fraction": 1.5,
         }[problem]
         labels = mx.array(values)
     profile = Organs({"unclassified_soft_tissue": Tissue(2.0, 0.3, ())})
@@ -68,11 +95,13 @@ def test_public_activity_rejects_invalid_labels(problem: str) -> None:
 @pytest.mark.parametrize(
     "problem", ["activity", "negative", "ct", "grid", "scatter", "counts", "spacing", "fwhm"]
 )
-def test_public_acquisition_rejects_invalid_inputs(problem: str) -> None:
+def test_public_acquisition_rejects_invalid_inputs(
+    problem: str, real_ct_and_liver: tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
+) -> None:
     """The public acquisition API validates both grids and scanner domains."""
     mx = cast(FdgRuntime, import_mlx())
-    activity = np.ones((2, 3, 4), dtype=np.float32)
-    ct = np.zeros_like(activity)
+    ct = real_ct_and_liver[0][:2, :3, :4].copy()
+    activity = np.maximum((ct + np.float32(1000)) / np.float32(1000), np.float32(0))
     scanner = Scanner(0.0, 0.0, (0.0, 0.0, 0.0), 100.0)
     spacing = (1.0, 1.0, 1.0)
     if problem in ("activity", "negative"):
@@ -91,6 +120,11 @@ def test_public_acquisition_rejects_invalid_inputs(problem: str) -> None:
         scanner = replace(scanner, fwhm_mm=(-1.0, 0.0, 0.0))
     with pytest.raises(ValueError):
         apply_acquisition_model(
-            mx.array(activity), mx.array(ct), scanner=scanner, count_level=1.0,
-            spacing_mm=spacing, seed=2, mx=mx,
+            mx.array(activity),
+            mx.array(ct),
+            scanner=scanner,
+            count_level=1.0,
+            spacing_mm=spacing,
+            seed=2,
+            mx=mx,
         )
