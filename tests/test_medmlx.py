@@ -11,6 +11,7 @@ import nibabel as nib
 import numpy as np
 import pytest
 from medmlx_core.errors import InvalidInputError
+from medmlx_core.outputs import validate_outputs
 
 from fdg_pet_ct_mlx.medmlx import run
 
@@ -69,6 +70,10 @@ def test_fdg_runner_preserves_geometry(fdg_inputs: FdgInputs) -> None:
     result = run(**fdg_inputs)
     destination = Path(fdg_inputs["output_dir"]) / "pet.nii.gz"
     assert result["outputs"] == {"pet": str(destination)}
+    _, artifacts = validate_outputs(result)
+    assert artifacts["pet"]["kind"] == "synthetic_image"
+    assert artifacts["pet"].get("grid_of") == "image_path"
+    assert artifacts["pet"].get("units") == "SUV"
     output = nib.load(destination)
     source = nib.load(fdg_inputs["image_path"])
     assert isinstance(output, nib.Nifti1Image)

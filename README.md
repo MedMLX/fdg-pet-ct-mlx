@@ -81,8 +81,9 @@ scanner presets.
 
 - **Output:** float32 SUV (body-weight convention, with no weight or dose normalization)
   on the CT shape and affine.
-- **Return value:** `{"outputs": {"pet": path}, "details": {...}}`, with run metadata in
-  `details`.
+- **Return value:** `{"outputs": {"pet": path}, "artifacts": {"pet": ...}, "details": {...}}`:
+  the `pet` artifact marks a synthetic SUV image on the CT grid, and `details` holds run
+  metadata.
 - **Errors:** invalid inputs raise `InvalidInputError`.
 
 ### Python API

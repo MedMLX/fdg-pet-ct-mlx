@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 from medmlx_core.errors import InvalidInputError, MissingDependencyError, ModelExecutionError
+from medmlx_core.outputs import artifact
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
@@ -181,10 +182,10 @@ def _load_label_ids(image: Nifti1Image) -> NDArray[np.uint8]:
 
 def run(
     *,
-    image_path: str,
-    labels_path: str,
-    profile_path: str,
-    output_dir: str,
+    image_path: str | Path,
+    labels_path: str | Path,
+    profile_path: str | Path,
+    output_dir: str | Path,
     count_level: float = 1.0,
     seed: int = 0,
     overwrite: bool = False,
@@ -213,7 +214,10 @@ def run(
         overwrite: Replace pet.nii.gz only when true. Input/output aliases are refused.
 
     Returns:
-        Absolute outputs.pet path and explicit image-space synthesis settings.
+        ``{"outputs": {"pet": path}, "artifacts": {"pet": ...}, "details": {...}}``:
+        the absolute ``pet`` path, a ``synthetic_image`` artifact in SUV on the
+        ``image_path`` grid (``image_physical``), and explicit image-space synthesis
+        settings.
     """
     count_level = _number(count_level, "count_level", positive=True)
     if type(seed) is not int or not 0 <= seed <= 4294967294:
@@ -311,6 +315,14 @@ def run(
         staged.unlink(missing_ok=True)
     return {
         "outputs": {"pet": destination.as_posix()},
+        "artifacts": {
+            "pet": artifact(
+                kind="synthetic_image",
+                coordinate_space="image_physical",
+                grid_of="image_path",
+                units="SUV",
+            )
+        },
         "details": {
             "method": "image-space FDG synthesis",
             "units": "SUV",
