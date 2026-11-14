@@ -1,3 +1,7 @@
 """Native MLX FDG PET image synthesis."""
 
+from fdg_pet_ct_mlx.medmlx import generate
+
 __version__ = "0.3.0"
+
+__all__ = ["generate"]

@@ -35,16 +35,16 @@ uv pip install "fdg-pet-ct-mlx>=0.3.0"
 With aligned CT and MAISI label volumes and your own profile JSON:
 
 ```python
-from fdg_pet_ct_mlx.medmlx import run
+from fdg_pet_ct_mlx import generate
 
-result = run(
+result = generate(
     image_path="ct.nii.gz",
-    labels_path="labels.nii.gz",
+    mask_path="labels.nii.gz",
     profile_path="profiles.json",
     output_dir="outputs",
     seed=7,
 )
-print(result["outputs"]["pet"])
+print(result["outputs"]["image"])
 ```
 
 The runner validates the image geometry and caller-supplied profiles, then writes
@@ -58,12 +58,12 @@ projection physics or reconstruction.
 | Argument | Meaning |
 | --- | --- |
 | `image_path` | One finite scalar 3D CT in NIfTI, in HU, with spatial units in mm |
-| `labels_path` | MAISI label IDs, integers in [0, 200], with the CT's shape, affine (absolute tolerance `1e-5`) and units |
+| `mask_path` | MAISI label map: IDs integers in [0, 200], with the CT's shape, affine (absolute tolerance `1e-5`) and units |
 | `profile_path` | Profile JSON, described below |
 | `output_dir` | Directory for `pet.nii.gz` |
 | `count_level` | Finite positive multiplier on `counts_per_suv`; default 1.0 |
 | `seed` | Integer in [0, 4294967294]; activity uses `seed`, acquisition `seed + 1` |
-| `overwrite` | `False` by default; an existing `pet.nii.gz` is never replaced |
+| `overwrite` | `False` by default; an existing `pet.nii.gz` is replaced only when `True` |
 
 Arguments are keyword-only. Volumes are never registered or resampled.
 
@@ -81,8 +81,8 @@ scanner presets.
 
 - **Output:** float32 SUV (body-weight convention, with no weight or dose normalization)
   on the CT shape and affine.
-- **Return value:** `{"outputs": {"pet": path}, "artifacts": {"pet": ...}, "details": {...}}`:
-  the `pet` artifact marks a synthetic SUV image on the CT grid, and `details` holds run
+- **Return value:** `{"outputs": {"image": path}, "artifacts": {"image": ...}, "details": {...}}`:
+  the `image` artifact marks a synthetic SUV image on the CT grid, and `details` holds run
   metadata.
 - **Errors:** invalid inputs raise `InvalidInputError`.
 

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 import math
-import os
-import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
@@ -14,6 +12,7 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 from medmlx_core.errors import InvalidInputError, MissingDependencyError, ModelExecutionError
+from medmlx_core.files import PathLike, input_file, output_targets, publish
 from medmlx_core.outputs import artifact
 from numpy.typing import NDArray
 
@@ -27,7 +26,7 @@ MODEL = {
     "requires_weights": False,
     "label": "Synthetic FDG PET",
     "task": "generation",
-    "run": "fdg_pet_ct_mlx.medmlx:run",
+    "run": "fdg_pet_ct_mlx.medmlx:generate",
     # Measured MLX peak for a 400x400x284 whole-body CT; larger inputs need more.
     "peak_memory_gb": 2.8,
     "readiness": "fdg_pet_ct_mlx.medmlx:readiness",
@@ -180,12 +179,15 @@ def _load_label_ids(image: Nifti1Image) -> NDArray[np.uint8]:
     return ids
 
 
-def run(
+OUTPUT_NAME = "pet.nii.gz"
+
+
+def generate(
     *,
-    image_path: str | Path,
-    labels_path: str | Path,
-    profile_path: str | Path,
-    output_dir: str | Path,
+    image_path: PathLike,
+    mask_path: PathLike,
+    profile_path: PathLike,
+    output_dir: PathLike,
     count_level: float = 1.0,
     seed: int = 0,
     overwrite: bool = False,
@@ -198,7 +200,7 @@ def run(
 
     Args:
         image_path: Finite scalar 3-D NIfTI CT in HU, with spatial units set to mm.
-        labels_path: Co-registered NIfTI MAISI labels, integer IDs in [0, 200],
+        mask_path: Co-registered NIfTI MAISI label map, integer IDs in [0, 200],
             with the CT shape, affine (absolute tolerance 1e-5) and mm units.
         profile_path: JSON object containing exactly ``tissues`` and ``scanner``.
             Each tissue contains exactly finite nonnegative ``suv_mean`` and
@@ -214,26 +216,20 @@ def run(
         overwrite: Replace pet.nii.gz only when true. Input/output aliases are refused.
 
     Returns:
-        ``{"outputs": {"pet": path}, "artifacts": {"pet": ...}, "details": {...}}``:
-        the absolute ``pet`` path, a ``synthetic_image`` artifact in SUV on the
+        ``{"outputs": {"image": path}, "artifacts": {"image": ...}, "details": {...}}``:
+        the absolute ``pet.nii.gz`` path, a ``synthetic_image`` artifact in SUV on the
         ``image_path`` grid (``image_physical``), and explicit image-space synthesis
         settings.
     """
     count_level = _number(count_level, "count_level", positive=True)
     if type(seed) is not int or not 0 <= seed <= 4294967294:
         raise InvalidInputError("seed must be an integer in [0, 4294967294]")
-    if type(overwrite) is not bool:
-        raise InvalidInputError("overwrite must be boolean")
-    image, labels, profile = [
-        Path(item).expanduser().resolve() for item in (image_path, labels_path, profile_path)
-    ]
-    destination = Path(output_dir).expanduser().resolve() / "pet.nii.gz"
-    if destination.resolve() in {image, labels, profile}:
-        raise InvalidInputError("Output must differ from all input paths")
-    if destination.is_dir() or (
-        (destination.exists() or destination.is_symlink()) and not overwrite
-    ):
-        raise InvalidInputError(f"Output exists: {destination}; pass overwrite=True to replace it")
+    image = input_file("image_path", image_path).resolve()
+    labels = input_file("mask_path", mask_path).resolve()
+    profile = input_file("profile_path", profile_path).resolve()
+    destination = output_targets(
+        output_dir, {"image": OUTPUT_NAME}, overwrite=overwrite, inputs=[image, labels, profile]
+    )["image"]
     organs, scanner = _profiles(profile)
     from fdg_pet_ct_mlx.acquisition import validate_count_scale
 
@@ -293,30 +289,16 @@ def run(
     result: NDArray[np.float32] = np.asarray(pet, dtype=np.float32)
     if result.shape != hu.shape or not np.isfinite(result).all() or (result < 0).any():
         raise ModelExecutionError("FDG synthesis returned invalid shape or SUV values")
-    destination.parent.mkdir(parents=True, exist_ok=True)
     header = ct.header.copy()
     header.set_data_dtype(np.float32)
     # cal_min/cal_max are the CT's display range in HU; zero marks them unset for SUV.
     header["cal_min"], header["cal_max"] = 0.0, 0.0
     output = type(ct)(result, affine, header)
-    with tempfile.NamedTemporaryFile(
-        dir=destination.parent,
-        suffix=".nii.gz",
-        delete=False,
-    ) as temp:
-        staged = Path(temp.name)
-    try:
-        nib.save(output, staged)
-        if overwrite:
-            os.replace(staged, destination)
-        else:
-            os.link(staged, destination)
-    finally:
-        staged.unlink(missing_ok=True)
+    publish({destination: lambda path: nib.save(output, path)})
     return {
-        "outputs": {"pet": destination.as_posix()},
+        "outputs": {"image": destination.as_posix()},
         "artifacts": {
-            "pet": artifact(
+            "image": artifact(
                 kind="synthetic_image",
                 coordinate_space="image_physical",
                 grid_of="image_path",
@@ -336,7 +318,7 @@ def run(
 
 
 def readiness() -> dict[str, object]:
-    """Check installed package metadata; profiles and input contents are validated by run."""
+    """Check installed package metadata; profiles and input contents are validated by generate."""
     try:
         version("fdg-pet-ct-mlx")
         version("nibabel")
