@@ -13,7 +13,7 @@ import pytest
 from medmlx_core.errors import InvalidInputError
 from medmlx_core.outputs import validate_outputs
 
-from fdg_pet_ct_mlx.medmlx import generate
+from fdg_pet_ct_mlx.medmlx import run
 
 
 class FdgInputs(TypedDict):
@@ -67,7 +67,7 @@ def fdg_inputs(tmp_path: Path) -> FdgInputs:
 
 
 def test_fdg_runner_preserves_geometry(fdg_inputs: FdgInputs) -> None:
-    result = generate(**fdg_inputs)
+    result = run(**fdg_inputs)
     destination = Path(fdg_inputs["output_dir"]) / "pet.nii.gz"
     assert result["outputs"] == {"image": str(destination)}
     _, artifacts = validate_outputs(result)
@@ -100,7 +100,7 @@ def test_fdg_rejects_invalid_arguments(fdg_inputs: FdgInputs, problem: str) -> N
         Path(fdg_inputs["output_dir"]).mkdir()
         (Path(fdg_inputs["output_dir"]) / "pet.nii.gz").write_bytes(b"existing output")
     with pytest.raises(InvalidInputError):
-        generate(**fdg_inputs, count_level=count_level, overwrite=overwrite)
+        run(**fdg_inputs, count_level=count_level, overwrite=overwrite)
 
 
 @pytest.mark.parametrize("suffix", [".nii", ".nii.gz"])
@@ -119,7 +119,7 @@ def test_fdg_rejects_invalid_source_labels(
     nib.save(labels, path)
     fdg_inputs["mask_path"] = str(path)
     with pytest.raises(InvalidInputError, match="finite integer IDs"):
-        generate(**fdg_inputs)
+        run(**fdg_inputs)
 
 
 def test_fdg_rejects_fractional_nifti_scaling(fdg_inputs: FdgInputs) -> None:
@@ -131,7 +131,7 @@ def test_fdg_rejects_fractional_nifti_scaling(fdg_inputs: FdgInputs) -> None:
     labels.header["scl_slope"], labels.header["scl_inter"] = 1.0, 2.0**-30
     nib.save(labels, fdg_inputs["mask_path"])
     with pytest.raises(InvalidInputError, match="finite integer IDs"):
-        generate(**fdg_inputs)
+        run(**fdg_inputs)
 
 
 @pytest.mark.parametrize("suffix", [".nii", ".nii.gz"])
@@ -142,7 +142,7 @@ def test_scaled_labels_preserve_seeded_pet(fdg_inputs: FdgInputs, suffix: str) -
     tissues = cast(dict[str, object], profile["tissues"])
     tissues["organ"] = {"suv_mean": 2.0, "suv_std": 0.3, "maisi_labels": [1]}
     profile_path.write_text(json.dumps(profile))
-    original = generate(**fdg_inputs, seed=17)
+    original = run(**fdg_inputs, seed=17)
     expected = nib.load(cast(dict[str, str], original["outputs"])["image"])
     assert isinstance(expected, nib.Nifti1Image)
     reference = expected.get_fdata(dtype=np.float32)
@@ -157,7 +157,7 @@ def test_scaled_labels_preserve_seeded_pet(fdg_inputs: FdgInputs, suffix: str) -
     nib.save(labels, path)
     fdg_inputs["mask_path"] = str(path)
     fdg_inputs["output_dir"] += "-scaled"
-    actual = generate(**fdg_inputs, seed=17)
+    actual = run(**fdg_inputs, seed=17)
     image = nib.load(cast(dict[str, str], actual["outputs"])["image"])
     assert isinstance(image, nib.Nifti1Image)
     np.testing.assert_array_equal(image.get_fdata(dtype=np.float32), reference)

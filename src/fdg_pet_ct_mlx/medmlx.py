@@ -26,7 +26,7 @@ MODEL = {
     "requires_weights": False,
     "label": "Synthetic FDG PET",
     "task": "generation",
-    "run": "fdg_pet_ct_mlx.medmlx:generate",
+    "run": "fdg_pet_ct_mlx.medmlx:run",
     # Measured MLX peak for a 400x400x284 whole-body CT; larger inputs need more.
     "peak_memory_gb": 2.8,
     "readiness": "fdg_pet_ct_mlx.medmlx:readiness",
@@ -182,7 +182,7 @@ def _load_label_ids(image: Nifti1Image) -> NDArray[np.uint8]:
 OUTPUT_NAME = "pet.nii.gz"
 
 
-def generate(
+def run(
     *,
     image_path: PathLike,
     mask_path: PathLike,
@@ -318,7 +318,7 @@ def generate(
 
 
 def readiness() -> dict[str, object]:
-    """Check installed package metadata; profiles and input contents are validated by generate."""
+    """Check installed package metadata; profiles and input contents are validated by run."""
     try:
         version("fdg-pet-ct-mlx")
         version("nibabel")

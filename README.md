@@ -35,9 +35,9 @@ uv pip install "fdg-pet-ct-mlx>=0.3.0"
 With aligned CT and MAISI label volumes and your own profile JSON:
 
 ```python
-from fdg_pet_ct_mlx import generate
+from fdg_pet_ct_mlx import run
 
-result = generate(
+result = run(
     image_path="ct.nii.gz",
     mask_path="labels.nii.gz",
     profile_path="profiles.json",
