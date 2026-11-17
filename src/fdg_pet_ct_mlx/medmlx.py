@@ -201,7 +201,8 @@ def run(
     Args:
         image_path: Finite scalar 3-D NIfTI CT in HU, with spatial units set to mm.
         mask_path: Co-registered NIfTI MAISI label map, integer IDs in [0, 200],
-            with the CT shape, affine (absolute tolerance 1e-5) and mm units.
+            with the CT shape and affine (absolute tolerance 1e-5); spatial units
+            mm or unset.
         profile_path: JSON object containing exactly ``tissues`` and ``scanner``.
             Each tissue contains exactly finite nonnegative ``suv_mean`` and
             ``suv_std`` (SUV), and a list of globally unique integer ``maisi_labels``
@@ -252,8 +253,12 @@ def run(
         segmentation, nib.Nifti1Image | nib.Nifti2Image
     ):
         raise InvalidInputError("CT and labels must be NIfTI images")
-    if ct.header.get_xyzt_units()[0] != "mm" or segmentation.header.get_xyzt_units()[0] != "mm":
-        raise InvalidInputError("CT and labels must declare NIfTI spatial units in mm")
+    # The labels must match the CT affine below, so an unset unit code on the label
+    # map (as written by NV-Segment-CT/MONAI) still places it on the CT's mm grid.
+    if ct.header.get_xyzt_units()[0] != "mm":
+        raise InvalidInputError("CT must declare NIfTI spatial units in mm")
+    if segmentation.header.get_xyzt_units()[0] not in ("mm", "unknown"):
+        raise InvalidInputError("Labels must declare NIfTI spatial units in mm or leave them unset")
     if ct.affine is None or segmentation.affine is None:
         raise InvalidInputError("CT and labels require an affine")
     hu = ct.get_fdata(dtype=np.float32)

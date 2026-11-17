@@ -122,6 +122,23 @@ def test_fdg_rejects_invalid_source_labels(
         run(**fdg_inputs)
 
 
+@pytest.mark.parametrize("unit", ["unknown", "meter"])
+def test_fdg_label_units_follow_the_ct_grid(fdg_inputs: FdgInputs, unit: str) -> None:
+    """NV-Segment-CT writes labels with unset units; declared non-mm units are refused."""
+    source = nib.load(fdg_inputs["mask_path"])
+    assert isinstance(source, nib.Nifti1Image)
+    labels = nib.Nifti1Image(np.asarray(source.dataobj), source.affine, source.header)
+    labels.header.set_xyzt_units(unit)
+    nib.save(labels, fdg_inputs["mask_path"])
+    if unit == "meter":
+        with pytest.raises(InvalidInputError, match="Labels must declare"):
+            run(**fdg_inputs)
+    else:
+        destination = Path(fdg_inputs["output_dir"]) / "pet.nii.gz"
+        assert run(**fdg_inputs)["outputs"] == {"image": str(destination)}
+        assert destination.is_file()
+
+
 def test_fdg_rejects_fractional_nifti_scaling(fdg_inputs: FdgInputs) -> None:
     """A sub-float32 fractional intercept cannot turn an integer source into valid IDs."""
     source = nib.load(fdg_inputs["mask_path"])
