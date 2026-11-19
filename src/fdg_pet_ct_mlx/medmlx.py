@@ -69,6 +69,10 @@ class Scanner:
     counts_per_suv: float
 
 
+# Activity is computed in float32, so larger profile values would become infinite.
+_MAX_FLOAT32 = float(np.finfo(np.float32).max)
+
+
 def _object(value: object, name: str, keys: set[str] | None = None) -> dict[str, object]:
     # JSON object with string keys; if ``keys`` is given they must match exactly.
     if not isinstance(value, dict) or not all(
@@ -123,8 +127,8 @@ def _profiles(path: Path) -> tuple[Organs, Scanner]:
             assigned.add(label)
             ids.append(label)
         tissues[name] = Tissue(
-            _number(tissue["suv_mean"], f"{name}.suv_mean"),
-            _number(tissue["suv_std"], f"{name}.suv_std"),
+            _number(tissue["suv_mean"], f"{name}.suv_mean", maximum=_MAX_FLOAT32),
+            _number(tissue["suv_std"], f"{name}.suv_std", maximum=_MAX_FLOAT32),
             tuple(ids),
         )
     if "unclassified_soft_tissue" not in tissues:
@@ -204,9 +208,10 @@ def run(
             with the CT shape and affine (absolute tolerance 1e-5); spatial units
             mm or unset.
         profile_path: JSON object containing exactly ``tissues`` and ``scanner``.
-            Each tissue contains exactly finite nonnegative ``suv_mean`` and
-            ``suv_std`` (SUV), and a list of globally unique integer ``maisi_labels``
-            in [0, 200]. ``unclassified_soft_tissue`` is required for unlisted IDs.
+            Each tissue contains exactly nonnegative ``suv_mean`` and
+            ``suv_std`` (SUV), each representable as a finite float32, and a list of
+            globally unique integer ``maisi_labels`` in [0, 200].
+            ``unclassified_soft_tissue`` is required for unlisted IDs.
             Scanner contains exactly ``scatter_fraction`` and ``randoms_fraction``
             in [0, 1], ``fwhm_mm`` as three finite nonnegative values in array-axis
             order, and finite positive ``counts_per_suv``. No profile is built in.

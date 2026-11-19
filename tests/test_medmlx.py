@@ -178,3 +178,79 @@ def test_scaled_labels_preserve_seeded_pet(fdg_inputs: FdgInputs, suffix: str) -
     image = nib.load(cast(dict[str, str], actual["outputs"])["image"])
     assert isinstance(image, nib.Nifti1Image)
     np.testing.assert_array_equal(image.get_fdata(dtype=np.float32), reference)
+
+
+@pytest.mark.parametrize("field", ["suv_mean", "suv_std"])
+@pytest.mark.parametrize("value", [1e39, 1e300])
+def test_fdg_rejects_profile_values_beyond_float32(
+    fdg_inputs: FdgInputs, field: str, value: float
+) -> None:
+    """Values that would become infinite in float32 are input errors naming the field."""
+    profile_path = Path(fdg_inputs["profile_path"])
+    profile = cast(dict[str, object], json.loads(profile_path.read_text()))
+    tissues = cast(dict[str, dict[str, object]], profile["tissues"])
+    tissues["unclassified_soft_tissue"][field] = value
+    profile_path.write_text(json.dumps(profile))
+    with pytest.raises(InvalidInputError, match=f"unclassified_soft_tissue.{field}"):
+        run(**fdg_inputs)
+
+
+def _reorient(
+    image: nib.Nifti1Image, axes: tuple[int, int, int], flipped: tuple[int, ...]
+) -> nib.Nifti1Image:
+    # Transpose to ``axes``, then flip the listed new axes, and fix the affine to match.
+    data = np.transpose(np.asarray(image.dataobj), axes)
+    voxel_map = np.zeros((4, 4))
+    voxel_map[3, 3] = 1.0
+    for new, old in enumerate(axes):
+        if new in flipped:
+            data = np.flip(data, new)
+            voxel_map[old, new], voxel_map[old, 3] = -1.0, data.shape[new] - 1.0
+        else:
+            voxel_map[old, new] = 1.0
+    assert image.affine is not None
+    result = nib.Nifti1Image(data, image.affine @ voxel_map, image.header)
+    result.header.set_xyzt_units("mm")
+    return result
+
+
+@pytest.mark.parametrize(
+    ("axes", "flipped"), [((0, 1, 2), ()), ((0, 1, 2), (0, 1)), ((1, 2, 0), (0,))]
+)
+def test_fdg_activity_stays_in_its_label_in_world_space(
+    fdg_inputs: FdgInputs, axes: tuple[int, int, int], flipped: tuple[int, ...]
+) -> None:
+    """PET sits on the label voxels in world space, with the CT's affine, in any orientation."""
+    profile_path = Path(fdg_inputs["profile_path"])
+    profile = cast(dict[str, dict[str, object]], json.loads(profile_path.read_text()))
+    profile["tissues"]["organ"] = {"suv_mean": 2.0, "suv_std": 0.0, "maisi_labels": [1]}
+    # Counts this high make the acquisition noise negligible against the expectation.
+    profile["scanner"]["counts_per_suv"] = 1e12
+    profile_path.write_text(json.dumps(profile))
+    oriented: dict[str, nib.Nifti1Image] = {}
+    for key in ("image_path", "mask_path"):
+        original = nib.load(fdg_inputs[key])
+        assert isinstance(original, nib.Nifti1Image)
+        oriented[key] = _reorient(original, axes, flipped)
+        nib.save(oriented[key], fdg_inputs[key])
+    ct, labels = (np.asarray(oriented[key].dataobj) for key in ("image_path", "mask_path"))
+    ct_affine, label_affine = oriented["image_path"].affine, oriented["mask_path"].affine
+    assert ct_affine is not None and label_affine is not None
+    run(**fdg_inputs)
+    output = nib.load(Path(fdg_inputs["output_dir"]) / "pet.nii.gz")
+    assert isinstance(output, nib.Nifti1Image)
+    assert output.affine is not None
+    np.testing.assert_array_equal(output.affine, ct_affine)
+    organ = labels == 1
+    assert 0 < organ.sum() < organ.size
+    attenuation = np.exp(-0.02 * np.clip((ct + 1000.0) / 1000.0, 0.0, 3.0))
+    expected = np.where(organ, 2.0 * attenuation, 0.0)
+    pet = output.get_fdata()
+    np.testing.assert_allclose(pet, expected, rtol=1e-4)
+
+    def world(affine: np.ndarray, voxels: np.ndarray) -> np.ndarray:
+        return voxels @ affine[:3, :3].T + affine[:3, 3]
+
+    np.testing.assert_allclose(
+        world(output.affine, np.argwhere(pet > 0)), world(label_affine, np.argwhere(organ))
+    )
