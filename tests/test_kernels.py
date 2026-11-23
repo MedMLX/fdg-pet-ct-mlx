@@ -11,9 +11,9 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 from medmlx_core.runtime import import_mlx
+from medmlx_core.typing import MlxRuntime
 from scipy.ndimage import gaussian_filter
 
-from fdg_pet_ct_mlx._typing import FdgRuntime
 from fdg_pet_ct_mlx.acquisition import apply_acquisition_model, gaussian_blur
 from fdg_pet_ct_mlx.activity import synthesize_activity_map
 from fdg_pet_ct_mlx.medmlx import Organs, Scanner, Tissue
@@ -51,7 +51,7 @@ def test_blur_matches_scipy_zero_padding(
     spacing: tuple[float, float, float],
     real_ct_and_liver: tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]],
 ) -> None:
-    mx = cast(FdgRuntime, import_mlx())
+    mx = cast(MlxRuntime, import_mlx())
     values = real_ct_and_liver[0] / np.float32(1024)
     sigma = tuple(
         f / (2 * math.sqrt(2 * math.log(2))) / s for f, s in zip(fwhm, spacing, strict=True)
@@ -69,7 +69,7 @@ def test_public_activity_rejects_invalid_labels(
     problem: str, real_ct_and_liver: tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
 ) -> None:
     """The independently callable activity API keeps validating native inputs."""
-    mx = cast(FdgRuntime, import_mlx())
+    mx = cast(MlxRuntime, import_mlx())
     values = real_ct_and_liver[1][:2, :3, :4].copy()
     if problem == "boolean":
         labels = mx.array(values, dtype=mx.bool_)
@@ -99,7 +99,7 @@ def test_public_acquisition_rejects_invalid_inputs(
     problem: str, real_ct_and_liver: tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]
 ) -> None:
     """The public acquisition API validates both grids and scanner domains."""
-    mx = cast(FdgRuntime, import_mlx())
+    mx = cast(MlxRuntime, import_mlx())
     ct = real_ct_and_liver[0][:2, :3, :4].copy()
     activity = np.maximum((ct + np.float32(1000)) / np.float32(1000), np.float32(0))
     scanner = Scanner(0.0, 0.0, (0.0, 0.0, 0.0), 100.0)

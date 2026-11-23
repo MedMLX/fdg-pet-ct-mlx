@@ -55,7 +55,7 @@ physics or reconstruction.
 
 | Argument | Meaning |
 | --- | --- |
-| `image_path` | One finite scalar 3D CT in NIfTI, in HU, with spatial units in mm |
+| `image_path` | One finite scalar 3D CT in NIfTI, in HU, with spatial units in mm, m or micron (unset is mm) |
 | `label_map_path` | MAISI label map: IDs integers in [0, 200], with the CT's shape and affine (absolute tolerance `1e-5`); spatial units mm or unset |
 | `profile_path` | Profile JSON, described below |
 | `output_dir` | Directory for `pet.nii.gz` |
@@ -71,14 +71,15 @@ scanner presets.
 | Object | Field | Requirement |
 | :--- | :--- | :--- |
 | `tissues` | One entry per tissue name | `unclassified_soft_tissue` is required and covers unlisted labels |
-| | `suv_mean`, `suv_std` | Finite and nonnegative |
+| | `suv_mean`, `suv_std` | Nonnegative and at most the float32 maximum (about 3.4e38) |
 | | `maisi_labels` | Integer IDs in [0, 200], unique across tissues |
 | `scanner` | `scatter_fraction`, `randoms_fraction` | In [0, 1] |
 | | `fwhm_mm` | Three finite nonnegative values in array-axis order |
 | | `counts_per_suv` | Finite and positive; its product with `count_level` must be a positive normal float32 |
 
 - **Output:** float32 SUV (body-weight convention, with no weight or dose normalization)
-  on the CT shape and affine.
+  on the CT grid, with the CT's header, so its spatial units are the CT's and its display
+  range (`cal_min`, `cal_max`) is unset.
 - **Return value:** `{"outputs": {"image": path}, "artifacts": {"image": ...}, "details": {...}}`:
   the `image` artifact marks a synthetic SUV image on the CT grid, and `details` holds run
   metadata.

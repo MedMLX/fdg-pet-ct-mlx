@@ -10,8 +10,9 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
+from medmlx_core.typing import MlxRuntime
+
 from fdg_pet_ct_mlx._core import acquire_activity
-from fdg_pet_ct_mlx._typing import FdgRuntime
 from fdg_pet_ct_mlx.profiles import FdgScannerProfile
 
 if TYPE_CHECKING:
@@ -48,7 +49,7 @@ def apply_acquisition_model(
     count_level: float,
     spacing_mm: tuple[float, float, float],
     seed: int,
-    mx: FdgRuntime,
+    mx: MlxRuntime,
 ) -> array:
     """Turn a synthetic activity volume into a PET-like SUV volume.
 
@@ -95,7 +96,7 @@ def gaussian_blur(
     volume: array,
     fwhm_mm: tuple[float, float, float],
     spacing_mm: tuple[float, float, float],
-    mx: FdgRuntime,
+    mx: MlxRuntime,
 ) -> array:
     """Blur a volume with a separable Gaussian, one 1-D pass per array axis.
 
@@ -134,7 +135,7 @@ def gaussian_blur(
     return blurred
 
 
-def _gaussian_kernel(sigma: float, mx: FdgRuntime) -> array:
+def _gaussian_kernel(sigma: float, mx: MlxRuntime) -> array:
     # Truncate at 3 sigma; the kernel is symmetric, so conv1d's correlation equals
     # convolution.
     radius = max(1, math.ceil(3.0 * sigma))
@@ -144,7 +145,7 @@ def _gaussian_kernel(sigma: float, mx: FdgRuntime) -> array:
     return kernel / mx.sum(kernel)
 
 
-def _smooth_axis(volume: array, kernel: array, axis: int, mx: FdgRuntime) -> array:
+def _smooth_axis(volume: array, kernel: array, axis: int, mx: MlxRuntime) -> array:
     # MLX convolutions are channels-last: (batch, length, channels). Fold every
     # other axis into the batch and use a single channel.
     moved = mx.moveaxis(volume, axis, -1)

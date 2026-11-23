@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
+from medmlx_core.typing import MlxRuntime
+
 from fdg_pet_ct_mlx._core import sample_activity
-from fdg_pet_ct_mlx._typing import FdgRuntime
 from fdg_pet_ct_mlx.profiles import FdgOrganProfile
 
 if TYPE_CHECKING:
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
 
 
 
-def validated_label_ids(labels: array, mx: FdgRuntime, *, context: str) -> array:
+def validated_label_ids(labels: array, mx: MlxRuntime, *, context: str) -> array:
     """Return int32 MAISI IDs after validating a nonempty 3-D label grid.
 
     Boolean, complex, nonfinite, fractional and out-of-range values raise
@@ -46,7 +47,7 @@ def synthesize_activity_map(
     profile: FdgOrganProfile,
     *,
     seed: int,
-    mx: FdgRuntime,
+    mx: MlxRuntime,
 ) -> array:
     """Draw a nonnegative float32 SUV volume on the label grid.
 

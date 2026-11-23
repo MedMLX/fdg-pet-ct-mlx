@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import math
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -14,12 +14,12 @@ import numpy as np
 from medmlx_core.errors import InvalidInputError, MissingDependencyError, ModelExecutionError
 from medmlx_core.files import PathLike, input_file, output_targets, publish
 from medmlx_core.outputs import artifact
+from medmlx_core.typing import MlxRuntime
+from medmlx_core.volumes import read_volume, write_like
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
     from nibabel import Nifti1Image
-
-    from fdg_pet_ct_mlx._typing import FdgRuntime
 
 MODEL = {
     "id": "fdg-pet-ct",
@@ -203,7 +203,8 @@ def run(
     physics/reconstruction, resample inputs, add lesions, or establish clinical validity.
 
     Args:
-        image_path: Finite scalar 3-D NIfTI CT in HU, with spatial units set to mm.
+        image_path: Finite scalar 3-D NIfTI CT in HU, with spatial units in
+            mm, m or micron (unset is mm).
         label_map_path: Co-registered NIfTI MAISI label map, integer IDs in [0, 200],
             with the CT shape and affine (absolute tolerance 1e-5); spatial units
             mm or unset.
@@ -243,6 +244,8 @@ def run(
         validate_count_scale(scanner.counts_per_suv, count_level)
     except ValueError as error:
         raise InvalidInputError(str(error)) from error
+    ct = read_volume(image, role="image_path")
+    hu, affine = ct.data, ct.affine
     try:
         import nibabel as nib
     except ImportError as error:
@@ -250,26 +253,17 @@ def run(
             "Reinstall fdg-pet-ct-mlx to restore its NIfTI I/O dependency.",
         ) from error
     try:
-        ct = nib.load(image)
         segmentation = nib.load(labels, keep_file_open=True)
     except (OSError, ValueError) as error:
-        raise InvalidInputError(f"Cannot load CT/labels NIfTI: {error}") from error
-    if not isinstance(ct, nib.Nifti1Image | nib.Nifti2Image) or not isinstance(
-        segmentation, nib.Nifti1Image | nib.Nifti2Image
-    ):
-        raise InvalidInputError("CT and labels must be NIfTI images")
+        raise InvalidInputError(f"Cannot load labels NIfTI: {error}") from error
+    if not isinstance(segmentation, nib.Nifti1Image | nib.Nifti2Image):
+        raise InvalidInputError("Labels must be a NIfTI image")
     # The labels must match the CT affine below, so an unset unit code on the label
     # map (as written by NV-Segment-CT/MONAI) still places it on the CT's mm grid.
-    if ct.header.get_xyzt_units()[0] != "mm":
-        raise InvalidInputError("CT must declare NIfTI spatial units in mm")
     if segmentation.header.get_xyzt_units()[0] not in ("mm", "unknown"):
         raise InvalidInputError("Labels must declare NIfTI spatial units in mm or leave them unset")
-    if ct.affine is None or segmentation.affine is None:
-        raise InvalidInputError("CT and labels require an affine")
-    hu = ct.get_fdata(dtype=np.float32)
-    affine = ct.affine
-    if hu.ndim != 3 or not hu.size or not np.isfinite(hu).all():
-        raise InvalidInputError("CT must be a nonempty finite scalar 3-D volume in HU")
+    if segmentation.affine is None:
+        raise InvalidInputError("Labels require an affine")
     if segmentation.shape != hu.shape or not np.allclose(
         affine, segmentation.affine, atol=1e-5, rtol=0
     ):
@@ -277,13 +271,11 @@ def run(
     ids = _load_label_ids(segmentation)
     del segmentation
     spacing = np.linalg.norm(affine[:3, :3], axis=0)
-    if not np.isfinite(affine).all() or np.linalg.det(affine[:3, :3]) == 0 or (spacing <= 0).any():
-        raise InvalidInputError("CT affine must be finite, nonsingular and have positive spacing")
     from medmlx_core.runtime import import_mlx
 
     from fdg_pet_ct_mlx._core import acquire_activity, sample_activity
 
-    mx = cast("FdgRuntime", import_mlx())
+    mx = cast(MlxRuntime, import_mlx())
     activity = sample_activity(mx.array(ids).astype(mx.int32), organs, seed=seed, mx=mx)
     del ids
     pet = acquire_activity(
@@ -299,12 +291,11 @@ def run(
     result: NDArray[np.float32] = np.asarray(pet, dtype=np.float32)
     if result.shape != hu.shape or not np.isfinite(result).all() or (result < 0).any():
         raise ModelExecutionError("FDG synthesis returned invalid shape or SUV values")
-    header = ct.header.copy()
-    header.set_data_dtype(np.float32)
     # cal_min/cal_max are the CT's display range in HU; zero marks them unset for SUV.
-    header["cal_min"], header["cal_max"] = 0.0, 0.0
-    output = type(ct)(result, affine, header)
-    publish({destination: lambda path: nib.save(output, path)})
+    header = ct.header.copy()
+    header["cal_min"] = header["cal_max"] = np.zeros((), np.float32)
+    grid = replace(ct, header=header)
+    publish({destination: lambda path: write_like(path, result, grid, dtype=np.float32)})
     return {
         "outputs": {"image": destination.as_posix()},
         "artifacts": {

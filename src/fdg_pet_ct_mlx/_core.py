@@ -5,7 +5,8 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from fdg_pet_ct_mlx._typing import FdgRuntime
+from medmlx_core.typing import MlxRuntime
+
 from fdg_pet_ct_mlx.profiles import FdgOrganProfile, FdgScannerProfile
 
 if TYPE_CHECKING:
@@ -17,7 +18,7 @@ _LOOKUP_MIN = 201
 
 
 def sample_activity(
-    ids: array, profile: FdgOrganProfile, *, seed: int, mx: FdgRuntime
+    ids: array, profile: FdgOrganProfile, *, seed: int, mx: MlxRuntime
 ) -> array:
     """Sample activity from nonempty int32 IDs already validated by the caller."""
     profile_labels = [label for spec in profile.tissues.values() for label in spec.maisi_labels]
@@ -54,7 +55,7 @@ def acquire_activity(
     count_level: float,
     spacing_mm: tuple[float, float, float],
     seed: int,
-    mx: FdgRuntime,
+    mx: MlxRuntime,
     validate_ct: bool,
 ) -> array:
     """Acquire PET, omitting the CT scan only for the runner's validated host input.
