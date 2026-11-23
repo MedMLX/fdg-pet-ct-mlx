@@ -47,11 +47,9 @@ result = run(
 print(result["outputs"]["image"])
 ```
 
-The runner validates the image geometry and caller-supplied profiles, then writes
-`pet.nii.gz` on the CT grid.
-
-No model weights are needed. This is image-space synthesis; it does not simulate
-projection physics or reconstruction.
+`run` checks the image geometry and your profiles, then writes `pet.nii.gz` on the CT
+grid. No model weights are needed. Synthesis is in image space, without projection
+physics or reconstruction.
 
 ### Inputs and outputs
 
@@ -138,8 +136,8 @@ pet = apply_acquisition_model(
 print(pet.shape, pet.dtype)  # (16, 16, 16), float32
 ```
 
-These profile values are synthetic, not calibrated tissue statistics or a scanner
-preset. Profiles are duck-typed; `fdg_pet_ct_mlx.profiles` documents the attributes.
+These profile values are placeholders, not calibrated tissue statistics or a scanner
+preset. Any object with the attributes documented in `fdg_pet_ct_mlx.profiles` works.
 
 - `synthesize_activity_map` maps 3D integer or integral float MAISI labels in
   [0, 2³¹ − 1] to SUV. Boolean, complex and invalid label volumes raise `ValueError`.
@@ -152,7 +150,7 @@ preset. Profiles are duck-typed; `fdg_pet_ct_mlx.profiles` documents the attribu
 
   Its arrays must be 3D with matching shapes.
 - `spacing_mm` and `fwhm_mm` follow array-axis order, whatever the orientation. Matching
-  shapes do not prove alignment; the caller owns registration.
+  shapes do not prove alignment; register the volumes first.
 - Each noisy step draws one MLX normal field from `mx.random.key(seed)`. The result is an
   MLX float32 SUV array on the input grid.
 
