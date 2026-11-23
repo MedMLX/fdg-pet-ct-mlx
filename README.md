@@ -6,7 +6,7 @@ Generate synthetic FDG PET activity from CT and organ labels with native MLX. In
 
 [![PyPI](https://img.shields.io/pypi/v/fdg-pet-ct-mlx)](https://pypi.org/project/fdg-pet-ct-mlx/)
 [![Python](https://img.shields.io/pypi/pyversions/fdg-pet-ct-mlx)](https://pypi.org/project/fdg-pet-ct-mlx/)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue)](https://github.com/MedMLX/fdg-pet-ct-mlx/blob/v0.4.0/LICENSE)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue)](https://github.com/MedMLX/fdg-pet-ct-mlx/blob/v0.5.0/LICENSE)
 [![Apple Silicon](https://img.shields.io/badge/Apple_Silicon-MLX-black?logo=apple)](https://github.com/ml-explore/mlx)
 [![MedMLX](https://img.shields.io/badge/MedMLX-runtime-A51C30)](https://github.com/MedMLX/medmlx)
 
@@ -27,7 +27,7 @@ Generate synthetic FDG PET activity from CT and organ labels with native MLX. In
 ```bash
 uv venv --python 3.13
 source .venv/bin/activate
-uv pip install "fdg-pet-ct-mlx>=0.4.0"
+uv pip install "fdg-pet-ct-mlx>=0.5.0"
 ```
 
 ## Run
@@ -172,4 +172,4 @@ For Codex, use `codex mcp add medmlx -- "$MEDMLX" serve --root "$HOME/medmlx-wor
 
 ## License
 
-[Apache-2.0](https://github.com/MedMLX/fdg-pet-ct-mlx/blob/v0.4.0/LICENSE). See [third-party notices](https://github.com/MedMLX/fdg-pet-ct-mlx/blob/v0.4.0/THIRD_PARTY_NOTICES.md).
+[Apache-2.0](https://github.com/MedMLX/fdg-pet-ct-mlx/blob/v0.5.0/LICENSE). See [third-party notices](https://github.com/MedMLX/fdg-pet-ct-mlx/blob/v0.5.0/THIRD_PARTY_NOTICES.md).
