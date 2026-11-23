@@ -18,7 +18,7 @@ from fdg_pet_ct_mlx.medmlx import run
 
 class FdgInputs(TypedDict):
     image_path: str
-    mask_path: str
+    label_map_path: str
     profile_path: str
     output_dir: str
 
@@ -27,8 +27,8 @@ class FdgInputs(TypedDict):
 def fdg_inputs(tmp_path: Path) -> FdgInputs:
     cache = Path.home() / ".cache" / "medmlx" / "test-data"
     ct_path = os.environ.get("MEDMLX_TEST_CT", str(cache / "hcc_063_ct.nii.gz"))
-    mask_path = os.environ.get("MEDMLX_TEST_MASK", str(cache / "hcc_063_liver.nii.gz"))
-    ct, mask = nib.load(ct_path), nib.load(mask_path)
+    label_map_path = os.environ.get("MEDMLX_TEST_MASK", str(cache / "hcc_063_liver.nii.gz"))
+    ct, mask = nib.load(ct_path), nib.load(label_map_path)
     assert isinstance(ct, nib.Nifti1Image) and isinstance(mask, nib.Nifti1Image)
     assert ct.affine is not None and mask.affine is not None
     assert ct.shape == mask.shape and np.allclose(ct.affine, mask.affine)
@@ -60,7 +60,7 @@ def fdg_inputs(tmp_path: Path) -> FdgInputs:
     (tmp_path / "profile.json").write_text(json.dumps(profile))
     return {
         "image_path": str(tmp_path / "ct.nii.gz"),
-        "mask_path": str(tmp_path / "labels.nii.gz"),
+        "label_map_path": str(tmp_path / "labels.nii.gz"),
         "profile_path": str(tmp_path / "profile.json"),
         "output_dir": str(tmp_path / "output"),
     }
@@ -109,15 +109,15 @@ def test_fdg_rejects_invalid_source_labels(
     fdg_inputs: FdgInputs, suffix: str, value: float
 ) -> None:
     """Validate source precision before compacting label IDs or entering Metal."""
-    source = nib.load(fdg_inputs["mask_path"])
+    source = nib.load(fdg_inputs["label_map_path"])
     assert isinstance(source, nib.Nifti1Image)
     values = np.ones(source.shape, dtype=np.float64)
     values[-1, -1, -1] = value
     labels = nib.Nifti1Image(values, source.affine, source.header)
     labels.header.set_data_dtype(np.float64)
-    path = Path(fdg_inputs["mask_path"]).with_name("invalid" + suffix)
+    path = Path(fdg_inputs["label_map_path"]).with_name("invalid" + suffix)
     nib.save(labels, path)
-    fdg_inputs["mask_path"] = str(path)
+    fdg_inputs["label_map_path"] = str(path)
     with pytest.raises(InvalidInputError, match="finite integer IDs"):
         run(**fdg_inputs)
 
@@ -125,11 +125,11 @@ def test_fdg_rejects_invalid_source_labels(
 @pytest.mark.parametrize("unit", ["unknown", "meter"])
 def test_fdg_label_units_follow_the_ct_grid(fdg_inputs: FdgInputs, unit: str) -> None:
     """NV-Segment-CT writes labels with unset units; declared non-mm units are refused."""
-    source = nib.load(fdg_inputs["mask_path"])
+    source = nib.load(fdg_inputs["label_map_path"])
     assert isinstance(source, nib.Nifti1Image)
     labels = nib.Nifti1Image(np.asarray(source.dataobj), source.affine, source.header)
     labels.header.set_xyzt_units(unit)
-    nib.save(labels, fdg_inputs["mask_path"])
+    nib.save(labels, fdg_inputs["label_map_path"])
     if unit == "meter":
         with pytest.raises(InvalidInputError, match="Labels must declare"):
             run(**fdg_inputs)
@@ -141,12 +141,12 @@ def test_fdg_label_units_follow_the_ct_grid(fdg_inputs: FdgInputs, unit: str) ->
 
 def test_fdg_rejects_fractional_nifti_scaling(fdg_inputs: FdgInputs) -> None:
     """A sub-float32 fractional intercept cannot turn an integer source into valid IDs."""
-    source = nib.load(fdg_inputs["mask_path"])
+    source = nib.load(fdg_inputs["label_map_path"])
     assert isinstance(source, nib.Nifti1Image)
     labels = nib.Nifti1Image(np.ones(source.shape, dtype=np.int16), source.affine, source.header)
     labels.header.set_data_dtype(np.int16)
     labels.header["scl_slope"], labels.header["scl_inter"] = 1.0, 2.0**-30
-    nib.save(labels, fdg_inputs["mask_path"])
+    nib.save(labels, fdg_inputs["label_map_path"])
     with pytest.raises(InvalidInputError, match="finite integer IDs"):
         run(**fdg_inputs)
 
@@ -164,15 +164,15 @@ def test_scaled_labels_preserve_seeded_pet(fdg_inputs: FdgInputs, suffix: str) -
     assert isinstance(expected, nib.Nifti1Image)
     reference = expected.get_fdata(dtype=np.float32)
     assert (reference > 0).any()
-    source = nib.load(fdg_inputs["mask_path"])
+    source = nib.load(fdg_inputs["label_map_path"])
     assert isinstance(source, nib.Nifti1Image)
     values = np.asarray(source.dataobj, dtype=np.int16) * 2
     labels = nib.Nifti1Image(values, source.affine, source.header)
     labels.header.set_data_dtype(np.int16)
     labels.header["scl_slope"], labels.header["scl_inter"] = 0.5, 0.0
-    path = Path(fdg_inputs["mask_path"]).with_name("scaled" + suffix)
+    path = Path(fdg_inputs["label_map_path"]).with_name("scaled" + suffix)
     nib.save(labels, path)
-    fdg_inputs["mask_path"] = str(path)
+    fdg_inputs["label_map_path"] = str(path)
     fdg_inputs["output_dir"] += "-scaled"
     actual = run(**fdg_inputs, seed=17)
     image = nib.load(cast(dict[str, str], actual["outputs"])["image"])
@@ -228,13 +228,13 @@ def test_fdg_activity_stays_in_its_label_in_world_space(
     profile["scanner"]["counts_per_suv"] = 1e12
     profile_path.write_text(json.dumps(profile))
     oriented: dict[str, nib.Nifti1Image] = {}
-    for key in ("image_path", "mask_path"):
+    for key in ("image_path", "label_map_path"):
         original = nib.load(fdg_inputs[key])
         assert isinstance(original, nib.Nifti1Image)
         oriented[key] = _reorient(original, axes, flipped)
         nib.save(oriented[key], fdg_inputs[key])
-    ct, labels = (np.asarray(oriented[key].dataobj) for key in ("image_path", "mask_path"))
-    ct_affine, label_affine = oriented["image_path"].affine, oriented["mask_path"].affine
+    ct, labels = (np.asarray(oriented[key].dataobj) for key in ("image_path", "label_map_path"))
+    ct_affine, label_affine = oriented["image_path"].affine, oriented["label_map_path"].affine
     assert ct_affine is not None and label_affine is not None
     run(**fdg_inputs)
     output = nib.load(Path(fdg_inputs["output_dir"]) / "pet.nii.gz")

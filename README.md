@@ -39,7 +39,7 @@ from fdg_pet_ct_mlx import run
 
 result = run(
     image_path="ct.nii.gz",
-    mask_path="labels.nii.gz",
+    label_map_path="labels.nii.gz",
     profile_path="profiles.json",
     output_dir="outputs",
     seed=7,
@@ -58,7 +58,7 @@ projection physics or reconstruction.
 | Argument | Meaning |
 | --- | --- |
 | `image_path` | One finite scalar 3D CT in NIfTI, in HU, with spatial units in mm |
-| `mask_path` | MAISI label map: IDs integers in [0, 200], with the CT's shape and affine (absolute tolerance `1e-5`); spatial units mm or unset |
+| `label_map_path` | MAISI label map: IDs integers in [0, 200], with the CT's shape and affine (absolute tolerance `1e-5`); spatial units mm or unset |
 | `profile_path` | Profile JSON, described below |
 | `output_dir` | Directory for `pet.nii.gz` |
 | `count_level` | Finite positive multiplier on `counts_per_suv`; default 1.0 |

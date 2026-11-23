@@ -189,7 +189,7 @@ OUTPUT_NAME = "pet.nii.gz"
 def run(
     *,
     image_path: PathLike,
-    mask_path: PathLike,
+    label_map_path: PathLike,
     profile_path: PathLike,
     output_dir: PathLike,
     count_level: float = 1.0,
@@ -204,7 +204,7 @@ def run(
 
     Args:
         image_path: Finite scalar 3-D NIfTI CT in HU, with spatial units set to mm.
-        mask_path: Co-registered NIfTI MAISI label map, integer IDs in [0, 200],
+        label_map_path: Co-registered NIfTI MAISI label map, integer IDs in [0, 200],
             with the CT shape and affine (absolute tolerance 1e-5); spatial units
             mm or unset.
         profile_path: JSON object containing exactly ``tissues`` and ``scanner``.
@@ -231,7 +231,7 @@ def run(
     if type(seed) is not int or not 0 <= seed <= 4294967294:
         raise InvalidInputError("seed must be an integer in [0, 4294967294]")
     image = input_file("image_path", image_path).resolve()
-    labels = input_file("mask_path", mask_path).resolve()
+    labels = input_file("label_map_path", label_map_path).resolve()
     profile = input_file("profile_path", profile_path).resolve()
     destination = output_targets(
         output_dir, {"image": OUTPUT_NAME}, overwrite=overwrite, inputs=[image, labels, profile]
